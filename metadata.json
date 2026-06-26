@@ -1,0 +1,8 @@
+{
+  "name": "Remix II: Remix: SmartSeed AI",
+  "description": "Copiloto agrónomo de Inteligencia Artificial Agronómica y Agricultura de Precisión 4.0 para decisiones hiper-precisas en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
