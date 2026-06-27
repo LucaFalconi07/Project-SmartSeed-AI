@@ -12,14 +12,40 @@ dotenv.config();
 let __filename = "";
 let __dirname = "";
 try {
-  __filename = fileURLToPath(import.meta.url);
-  __dirname = path.dirname(__filename);
+  if (typeof import.meta !== "undefined" && import.meta && import.meta.url) {
+    __filename = fileURLToPath(import.meta.url);
+    __dirname = path.dirname(__filename);
+  }
 } catch (e) {
-  __filename = typeof __filename !== "undefined" ? __filename : "";
+  // Safe catch
+}
+if (!__filename) {
+  __filename = typeof __filename !== "undefined" ? __filename : process.cwd();
   __dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd();
 }
 
 const PORT = 3000;
+
+// Validador robusto de URL de Supabase para evitar llamadas erróneas a placeholders o dominios inválidos
+function isValidSupabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const trimmed = url.trim();
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      return false;
+    }
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+    // Excluir motores de búsqueda conocidos o dominios de marcador de posición
+    if (host === "www.google.com" || host === "google.com" || host.includes("example.com")) {
+      return false;
+    }
+    // Debe contener supabase o ser localhost/127.0.0.1
+    return host.includes("supabase") || host === "localhost" || host === "127.0.0.1";
+  } catch (e) {
+    return false;
+  }
+}
 
 // Lazy initialize Supabase client
 let supabaseClient: any = null;
@@ -29,6 +55,11 @@ let supabaseKey = process.env.SUPABASE_ANON_KEY;
 function getSupabaseClient() {
   supabaseUrl = process.env.SUPABASE_URL;
   supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+  if (!isValidSupabaseUrl(supabaseUrl)) {
+    return null;
+  }
+
   if (!supabaseClient && supabaseUrl && supabaseKey) {
     try {
       let sanitizedUrl = supabaseUrl.trim();
@@ -422,7 +453,8 @@ app.get("/api/health", (req, res) => {
     const currentKey = process.env.SUPABASE_ANON_KEY || "";
     const hasUrl = !!currentUrl;
     const hasKey = !!currentKey;
-    const client = getSupabaseClient();
+    const isValid = isValidSupabaseUrl(currentUrl);
+    const client = isValid ? getSupabaseClient() : null;
     let connected = false;
     let tableExists = false;
     let errorMessage = "";
@@ -455,6 +487,8 @@ app.get("/api/health", (req, res) => {
       } catch (err: any) {
         errorMessage = err.message || "Unknown connection error";
       }
+    } else if (hasUrl && !isValid) {
+      errorMessage = "La URL de Supabase ingresada no es válida o es un marcador de posición de prueba (ej. Google).";
     }
 
     const schemaSql = `CREATE TABLE smart_history (
@@ -471,11 +505,11 @@ app.get("/api/health", (req, res) => {
 );`;
 
     res.json({
-      configured: hasUrl && hasKey,
+      configured: hasUrl && hasKey && isValid,
       connected,
       tableExists,
       projectName: "SmartSeed-AI",
-      supabaseUrl: currentUrl ? `${currentUrl.substring(0, 20)}...` : null,
+      supabaseUrl: currentUrl && isValid ? `${currentUrl.substring(0, 20)}...` : null,
       recordCount,
       errorMessage,
       schemaSql,
