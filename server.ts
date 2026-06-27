@@ -711,7 +711,7 @@ Responde ÚNICAMENTE en formato de JSON limpio con las siguientes claves (sé ul
 }`;
 
           const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.5-flash",
             contents: prompt,
             config: {
               responseMimeType: "application/json",
@@ -1155,7 +1155,7 @@ No respondas únicamente con kg/ha de producto comercial. Prioriza siempre la re
 6. IDIOMA: Responde enteramente en español técnico. No uses rodeos ni introducciones innecesarias. Sé directo, riguroso y profesional.`;
 
       const chat = ai.chats.create({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         config: {
           systemInstruction: systemPrompt,
           temperature: 0.15,
