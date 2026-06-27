@@ -518,7 +518,7 @@ app.get("/api/health", (req, res) => {
 
   // POST save credentials dynamically to memory and disk
   app.post("/api/save-supabase-credentials", async (req, res) => {
-    let { url, key } = req.body;
+    let { url, key } = req.body || {};
     if (!url || !key) {
       return res.status(400).json({ success: false, error: "Faltan parámetros 'url' o 'key'." });
     }
@@ -691,7 +691,7 @@ app.get("/api/health", (req, res) => {
         soil_type = "sandy",
         soil_temp_c,
         forecast_precip_24h_mm,
-      } = req.body;
+      } = req.body || {};
 
       // Convenciones numéricas robustas para evitar problemas de coerción en Vercel/Node
       const moisture = typeof soil_moisture_pct !== "undefined" && soil_moisture_pct !== null ? Number(soil_moisture_pct) : 14;
@@ -1050,7 +1050,7 @@ Nivel de confianza: ${analysis.confidence_level_pct}% (${analysis.confidence_lev
 
   // API 2: Copilot Chat Route
   app.post("/api/chat", async (req, res) => {
-    const { message, telemetry } = req.body;
+    const { message, telemetry } = req.body || {};
 
     if (!telemetry) {
       return res.status(400).json({ success: false, error: "Missing telemetry parameter" });

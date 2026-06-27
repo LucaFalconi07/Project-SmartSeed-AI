@@ -326,6 +326,9 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
       });
+      if (!response.ok) {
+        throw new Error(`Server responded with status ${response.status}`);
+      }
       const data = await response.json();
       if (data.success) {
         setAnalysis({
@@ -360,6 +363,9 @@ export default function App() {
           telemetry: params,
         }),
       });
+      if (!response.ok) {
+        throw new Error(`Server responded with status ${response.status}`);
+      }
       const data = await response.json();
       setChatHistory((prev) => [...prev, { sender: "bot", text: data.reply || data.error }]);
     } catch (err) {
@@ -388,6 +394,9 @@ export default function App() {
           telemetry: params,
         }),
       });
+      if (!response.ok) {
+        throw new Error(`Server responded with status ${response.status}`);
+      }
       const data = await response.json();
       setChatHistory((prev) => [...prev, { sender: "bot", text: data.reply || data.error }]);
     } catch (err) {
