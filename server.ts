@@ -8,9 +8,16 @@ import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-// Standard ESM replacement for __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Standard ESM replacement for __dirname, safe for CommonJS environment like Vercel
+let __filename = "";
+let __dirname = "";
+try {
+  __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} catch (e) {
+  __filename = typeof __filename !== "undefined" ? __filename : "";
+  __dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+}
 
 const PORT = 3000;
 
@@ -1171,6 +1178,17 @@ No respondas únicamente con kg/ha de producto comercial. Prioriza siempre la re
       const text = generateLocalAgronomicResponse(message, telemetry);
       return res.json({ reply: text });
     }
+  });
+
+  // Global error handling middleware to catch all uncaught route/API errors and return JSON instead of HTML
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("SmartSeed Express error handler caught:", err);
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      message: err?.message || String(err),
+      stack: process.env.NODE_ENV !== "production" ? err?.stack : undefined
+    });
   });
 
   // Serve static UI assets under Vite or custom build static path
