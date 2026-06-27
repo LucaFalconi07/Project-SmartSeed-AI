@@ -542,33 +542,37 @@ app.get("/api/health", (req, res) => {
       // 2. Clear old client instance so getSupabaseClient() recreates it
       supabaseClient = null;
 
-      // 3. Write to .env file
-      const envPath = path.join(process.cwd(), ".env");
-      let content = "";
-      if (fs.existsSync(envPath)) {
-        content = fs.readFileSync(envPath, "utf-8");
-      } else {
-        const examplePath = path.join(process.cwd(), ".env.example");
-        if (fs.existsSync(examplePath)) {
-          content = fs.readFileSync(examplePath, "utf-8");
+      // 3. Write to .env file (safely, since Vercel has a read-only filesystem)
+      try {
+        const envPath = path.join(process.cwd(), ".env");
+        let content = "";
+        if (fs.existsSync(envPath)) {
+          content = fs.readFileSync(envPath, "utf-8");
+        } else {
+          const examplePath = path.join(process.cwd(), ".env.example");
+          if (fs.existsSync(examplePath)) {
+            content = fs.readFileSync(examplePath, "utf-8");
+          }
         }
-      }
 
-      // Replace or add SUPABASE_URL
-      if (content.includes("SUPABASE_URL=")) {
-        content = content.replace(/SUPABASE_URL=.*/g, `SUPABASE_URL="${url}"`);
-      } else {
-        content += `\nSUPABASE_URL="${url}"`;
-      }
+        // Replace or add SUPABASE_URL
+        if (content.includes("SUPABASE_URL=")) {
+          content = content.replace(/SUPABASE_URL=.*/g, `SUPABASE_URL="${url}"`);
+        } else {
+          content += `\nSUPABASE_URL="${url}"`;
+        }
 
-      // Replace or add SUPABASE_ANON_KEY
-      if (content.includes("SUPABASE_ANON_KEY=")) {
-        content = content.replace(/SUPABASE_ANON_KEY=.*/g, `SUPABASE_ANON_KEY="${key}"`);
-      } else {
-        content += `\nSUPABASE_ANON_KEY="${key}"`;
-      }
+        // Replace or add SUPABASE_ANON_KEY
+        if (content.includes("SUPABASE_ANON_KEY=")) {
+          content = content.replace(/SUPABASE_ANON_KEY=.*/g, `SUPABASE_ANON_KEY="${key}"`);
+        } else {
+          content += `\nSUPABASE_ANON_KEY="${key}"`;
+        }
 
-      fs.writeFileSync(envPath, content.trim() + "\n", "utf-8");
+        fs.writeFileSync(envPath, content.trim() + "\n", "utf-8");
+      } catch (writeErr) {
+        console.warn("Could not write .env file (read-only filesystem on Vercel):", writeErr);
+      }
 
       // 4. Test connection immediately
       const client = getSupabaseClient();
@@ -683,19 +687,24 @@ app.get("/api/health", (req, res) => {
     try {
       const {
         crop = "corn",
-        soil_moisture_pct = 14,
+        soil_moisture_pct,
         soil_type = "sandy",
-        soil_temp_c = 15,
-        forecast_precip_24h_mm = 35,
+        soil_temp_c,
+        forecast_precip_24h_mm,
       } = req.body;
+
+      // Convenciones numéricas robustas para evitar problemas de coerción en Vercel/Node
+      const moisture = typeof soil_moisture_pct !== "undefined" && soil_moisture_pct !== null ? Number(soil_moisture_pct) : 14;
+      const temp = typeof soil_temp_c !== "undefined" && soil_temp_c !== null ? Number(soil_temp_c) : 15;
+      const precip = typeof forecast_precip_24h_mm !== "undefined" && forecast_precip_24h_mm !== null ? Number(forecast_precip_24h_mm) : 35;
 
       // Calculate base structured metrics deterministically to ensure agronomical logic
       const result = runStaticAnalysis(
-        crop,
-        soil_moisture_pct,
-        soil_type,
-        soil_temp_c,
-        forecast_precip_24h_mm
+        crop === "soy" ? "soy" : "corn",
+        isNaN(moisture) ? 14 : moisture,
+        soil_type === "sandy" || soil_type === "loamy" || soil_type === "clayey" ? soil_type : "sandy",
+        isNaN(temp) ? 15 : temp,
+        isNaN(precip) ? 35 : precip
       );
 
       // Now query Gemini for the ultra-premium custom generated reports in Spanish (Section 1)
@@ -1048,29 +1057,42 @@ Nivel de confianza: ${analysis.confidence_level_pct}% (${analysis.confidence_lev
     }
 
     try {
+      // Safe numeric conversions for telemetry inside chat
+      const safeCrop = telemetry.crop === "soy" ? "soy" : "corn";
+      const safeSoilType = telemetry.soil_type === "sandy" || telemetry.soil_type === "loamy" || telemetry.soil_type === "clayey" ? telemetry.soil_type : "sandy";
+      const safeMoisture = typeof telemetry.soil_moisture_pct !== "undefined" && telemetry.soil_moisture_pct !== null ? Number(telemetry.soil_moisture_pct) : 14;
+      const safeTemp = typeof telemetry.soil_temp_c !== "undefined" && telemetry.soil_temp_c !== null ? Number(telemetry.soil_temp_c) : 15;
+      const safePrecip = typeof telemetry.forecast_precip_24h_mm !== "undefined" && telemetry.forecast_precip_24h_mm !== null ? Number(telemetry.forecast_precip_24h_mm) : 35;
+
       const ai = getGeminiClient();
       if (!ai) {
-        const text = generateLocalAgronomicResponse(message, telemetry);
+        const text = generateLocalAgronomicResponse(message, {
+          crop: safeCrop,
+          soil_type: safeSoilType,
+          soil_moisture_pct: safeMoisture,
+          soil_temp_c: safeTemp,
+          forecast_precip_24h_mm: safePrecip
+        });
         return res.json({ reply: text });
       }
 
       const analysis = runStaticAnalysis(
-        telemetry.crop,
-        telemetry.soil_moisture_pct,
-        telemetry.soil_type,
-        telemetry.soil_temp_c,
-        telemetry.forecast_precip_24h_mm
+        safeCrop,
+        isNaN(safeMoisture) ? 14 : safeMoisture,
+        safeSoilType,
+        isNaN(safeTemp) ? 15 : safeTemp,
+        isNaN(safePrecip) ? 35 : safePrecip
       );
 
       const systemPrompt = `Eres SmartSeed AI, un copiloto experto agronómico en Agricultura de Precisión 4.0 de alta gama.
 Tu misión es asistir a productores y agrónomos en decisiones de siembra de alta precisión, control hídrico, fertilización y labranza.
 
 TELEMETRÍA ACTUAL DEL LOTE:
-- Cultivo Activo: ${telemetry.crop === "corn" ? "Maíz" : "Soja"}
-- Textura del Suelo: ${telemetry.soil_type === "sandy" ? "Arenoso" : telemetry.soil_type === "clayey" ? "Arcilloso" : "Franco (Loamy)"}
-- Humedad actual del suelo: ${telemetry.soil_moisture_pct}%
-- Temperatura actual del suelo: ${telemetry.soil_temp_c}°C
-- Pronóstico climático de lluvia (próximas 24h): ${telemetry.forecast_precip_24h_mm} mm
+- Cultivo Activo: ${safeCrop === "corn" ? "Maíz" : "Soja"}
+- Textura del Suelo: ${safeSoilType === "sandy" ? "Arenoso" : safeSoilType === "clayey" ? "Arcilloso" : "Franco (Loamy)"}
+- Humedad actual del suelo: ${safeMoisture}%
+- Temperatura actual del suelo: ${safeTemp}°C
+- Pronóstico climático de lluvia (próximas 24h): ${safePrecip} mm
 
 SISTEMA OPERATIVO ISI CORE (VALORES OBLIGATORIOS CALCULADOS):
 - Índice de Siembra Inteligente (ISI) actual: ${analysis.isi_score}/100
