@@ -402,9 +402,10 @@ function runStaticAnalysis(
   };
 }
 
+export const app = express();
+app.use(express.json());
+
 async function startServer() {
-  const app = express();
-  app.use(express.json());
 
   // API Healthcheck
   app.get("/api/health", (req, res) => {
@@ -1189,9 +1190,13 @@ No respondas únicamente con kg/ha de producto comercial. Prioriza siempre la re
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SmartSeed AI application server running on http://0.0.0.0:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`SmartSeed AI application server running on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
