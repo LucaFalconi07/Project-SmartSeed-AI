@@ -411,14 +411,12 @@ function runStaticAnalysis(
 export const app = express();
 app.use(express.json());
 
-async function startServer() {
+// API Healthcheck
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", message: "SmartSeed AI server is live." });
+});
 
-  // API Healthcheck
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", message: "SmartSeed AI server is live." });
-  });
-
-  // GET Supabase and Local History status
+// GET Supabase and Local History status
   app.get("/api/supabase-status", async (req, res) => {
     const currentUrl = process.env.SUPABASE_URL || "";
     const currentKey = process.env.SUPABASE_ANON_KEY || "";
@@ -1191,30 +1189,33 @@ No respondas únicamente con kg/ha de producto comercial. Prioriza siempre la re
     });
   });
 
-  // Serve static UI assets under Vite or custom build static path
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    // Production static serving
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
+  // Serve static UI assets under Vite or custom build static path (Only if NOT on Vercel)
   if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`SmartSeed AI application server running on http://0.0.0.0:${PORT}`);
-    });
-  }
-}
+    (async () => {
+      try {
+        if (process.env.NODE_ENV !== "production") {
+          const { createServer: createViteServer } = await import("vite");
+          const vite = await createViteServer({
+            server: { middlewareMode: true },
+            appType: "spa",
+          });
+          app.use(vite.middlewares);
+        } else {
+          // Production static serving (outside of Vercel, e.g., standard Docker/Node server)
+          const distPath = path.join(process.cwd(), "dist");
+          app.use(express.static(distPath));
+          app.get("*", (req, res) => {
+            res.sendFile(path.join(distPath, "index.html"));
+          });
+        }
 
-startServer();
+        app.listen(PORT, "0.0.0.0", () => {
+          console.log(`SmartSeed AI application server running on http://0.0.0.0:${PORT}`);
+        });
+      } catch (err) {
+        console.error("Failed to start local development/production server:", err);
+      }
+    })();
+  }
 
 export default app;
